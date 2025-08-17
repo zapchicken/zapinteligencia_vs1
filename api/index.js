@@ -182,19 +182,43 @@ app.post('/upload', (req, res) => {
             }
         });
 
-        upload.single('file')(req, res, (err) => {
+        upload.single('file')(req, res, async (err) => {
             if (err instanceof deps.multer.MulterError) {
+                console.log('❌ Erro do Multer:', err.message);
                 return res.status(400).json({ error: `Erro no upload: ${err.message}` });
             } else if (err) {
+                console.log('❌ Erro geral no upload:', err.message);
                 return res.status(400).json({ error: `Erro no upload: ${err.message}` });
             }
 
             if (!req.file) {
+                console.log('❌ Nenhum arquivo recebido');
                 return res.status(400).json({ error: 'Nenhum arquivo selecionado' });
             }
 
             const fileType = req.body.file_type;
             const filename = req.file.filename;
+            const filePath = req.file.path;
+
+            console.log('✅ Upload bem-sucedido:', {
+                filename,
+                fileType,
+                size: req.file.size,
+                path: filePath
+            });
+
+            // Verifica se o arquivo foi realmente salvo
+            try {
+                const exists = await deps.fs.pathExists(filePath);
+                console.log('📁 Arquivo existe no disco:', exists);
+                
+                if (exists) {
+                    const stat = await deps.fs.stat(filePath);
+                    console.log('📊 Tamanho do arquivo:', stat.size, 'bytes');
+                }
+            } catch (error) {
+                console.log('❌ Erro ao verificar arquivo:', error.message);
+            }
 
             deps.logger.info(`Arquivo ${filename} carregado com sucesso (tipo: ${fileType})`);
 
@@ -202,7 +226,8 @@ app.post('/upload', (req, res) => {
                 success: true,
                 message: `Arquivo ${filename} carregado com sucesso!`,
                 filename: filename,
-                fileType: fileType
+                fileType: fileType,
+                size: req.file.size
             });
         });
 
@@ -215,34 +240,60 @@ app.post('/upload', (req, res) => {
 // Processamento de dados
 app.post('/process', async (req, res) => {
     try {
+        console.log('🔍 Iniciando processamento...');
+        console.log('📋 Dependências carregadas:', deps.loaded);
+        
         if (!deps.loaded) {
+            console.log('❌ Dependências não carregadas:', deps.error);
             return res.status(500).json({ 
-                error: 'Dependências não carregadas. Verifique a configuração.' 
+                error: 'Dependências não carregadas. Verifique a configuração.',
+                details: deps.error
             });
         }
 
         const diasInatividade = parseInt(req.body.dias_inatividade) || 30;
         const ticketMinimo = parseFloat(req.body.ticket_minimo) || 50.0;
 
+        console.log('⚙️ Configurações:', { diasInatividade, ticketMinimo });
+
         // Inicializa processador
         if (!globalProcessor) {
+            console.log('🏗️ Criando processador...');
             globalProcessor = new deps.ZapChickenProcessor(deps.FILE_CONFIG.uploadPath, deps.FILE_CONFIG.outputPath);
         }
 
         globalProcessor.config.diasInatividade = diasInatividade;
         globalProcessor.config.ticketMedioMinimo = ticketMinimo;
 
+        console.log('📁 Verificando arquivos em:', deps.FILE_CONFIG.uploadPath);
+
+        // Verifica se há arquivos antes de processar
+        try {
+            const files = await deps.fs.readdir(deps.FILE_CONFIG.uploadPath);
+            console.log('📋 Arquivos encontrados:', files);
+        } catch (error) {
+            console.log('❌ Erro ao ler diretório:', error.message);
+        }
+
         // Carrega e processa os arquivos
+        console.log('🔄 Carregando arquivos ZapChicken...');
         const dataframes = await globalProcessor.loadZapchickenFiles();
         
+        console.log('📊 Dataframes carregados:', Object.keys(dataframes));
+        
         if (Object.keys(dataframes).length === 0) {
+            console.log('❌ Nenhum arquivo encontrado');
             return res.status(400).json({
-                error: 'Nenhum arquivo da ZapChicken encontrado. Faça upload dos arquivos primeiro.'
+                error: 'Nenhum arquivo da ZapChicken encontrado. Faça upload dos arquivos primeiro.',
+                uploadPath: deps.FILE_CONFIG.uploadPath
             });
         }
 
         // Salva relatórios
+        console.log('💾 Salvando relatórios...');
         const savedFiles = await globalProcessor.saveReports();
+        
+        console.log('✅ Relatórios salvos:', savedFiles);
         
         globalDataLoaded = true;
 
@@ -254,8 +305,14 @@ app.post('/process', async (req, res) => {
         });
 
     } catch (error) {
-        console.error('Erro ao processar dados:', error);
-        res.status(500).json({ error: `Erro ao processar dados: ${error.message}` });
+        console.error('❌ Erro detalhado ao processar dados:', error);
+        console.error('📋 Stack trace:', error.stack);
+        
+        res.status(500).json({ 
+            error: `Erro ao processar dados: ${error.message}`,
+            details: error.stack,
+            uploadPath: deps.loaded ? deps.FILE_CONFIG.uploadPath : 'Não disponível'
+        });
     }
 });
 
