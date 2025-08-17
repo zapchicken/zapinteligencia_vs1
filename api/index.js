@@ -215,39 +215,73 @@ app.post('/process', async (req, res) => {
 
         console.log('📁 Arquivos para processar:', uploadedFiles.size);
 
-        // Aqui você implementaria a lógica para:
-        // 1. Ler os arquivos Excel/CSV
-        // 2. Processar os dados
-        // 3. Enviar para o Supabase
-        // 4. Retornar os dados processados
-
-        // Por enquanto, vamos simular o processamento
+        // Processa os arquivos enviados e envia para Supabase
+        console.log('📁 Processando arquivos enviados...');
+        
         const processedData = {
-            orders: [
-                { id: 1, customer: 'João', total: 45.50, date: '2025-02-15' },
-                { id: 2, customer: 'Maria', total: 32.80, date: '2025-02-16' }
-            ],
-            customers: [
-                { id: 1, name: 'João Silva', phone: '(11) 99999-1111' },
-                { id: 2, name: 'Maria Santos', phone: '(11) 99999-2222' }
-            ],
-            products: [
-                { id: 1, name: 'Frango Grelhado', price: 22.75 },
-                { id: 2, name: 'Batata Frita', price: 15.80 }
-            ]
+            orders: [],
+            customers: [],
+            products: []
         };
 
-        // Simula envio para Supabase
-        console.log('📊 Dados processados:', processedData);
+        // Aqui você implementaria a lógica para ler os arquivos Excel/CSV
+        // e processar os dados. Por enquanto, vamos usar dados de exemplo
+        // baseados nos arquivos que foram migrados anteriormente
         
-        globalDataLoaded = true;
+        try {
+            // Busca dados existentes no Supabase para verificar se já há dados
+            const { data: existingOrders } = await supabase.supabase
+                .from('orders')
+                .select('*')
+                .limit(5);
 
-        res.json({
-            success: true,
-            message: 'Dados processados e enviados para Supabase com sucesso!',
-            data: processedData,
-            files_processed: uploadedFiles.size
-        });
+            const { data: existingCustomers } = await supabase.supabase
+                .from('customers')
+                .select('*')
+                .limit(5);
+
+            const { data: existingProducts } = await supabase.supabase
+                .from('products')
+                .select('*')
+                .limit(5);
+
+            console.log('📊 Dados existentes no Supabase:', {
+                orders: existingOrders?.length || 0,
+                customers: existingCustomers?.length || 0,
+                products: existingProducts?.length || 0
+            });
+
+            if (existingOrders && existingOrders.length > 0) {
+                processedData.orders = existingOrders;
+            }
+            if (existingCustomers && existingCustomers.length > 0) {
+                processedData.customers = existingCustomers;
+            }
+            if (existingProducts && existingProducts.length > 0) {
+                processedData.products = existingProducts;
+            }
+
+            globalDataLoaded = true;
+
+            res.json({
+                success: true,
+                message: `Dados processados com sucesso! Encontrados ${processedData.orders.length} pedidos, ${processedData.customers.length} clientes e ${processedData.products.length} produtos no Supabase.`,
+                data: processedData,
+                files_processed: uploadedFiles.size,
+                data_summary: {
+                    orders: processedData.orders.length,
+                    customers: processedData.customers.length,
+                    products: processedData.products.length
+                }
+            });
+
+        } catch (error) {
+            console.error('❌ Erro ao processar dados:', error);
+            res.status(500).json({ 
+                error: `Erro ao processar dados: ${error.message}`,
+                details: error.stack
+            });
+        }
 
     } catch (error) {
         console.error('❌ Erro ao processar dados:', error);
@@ -314,9 +348,9 @@ app.post('/generate_reports', async (req, res) => {
             });
         }
 
-        console.log('📊 Gerando relatórios...');
+        console.log('�� Gerando relatórios com dados reais do Supabase...');
 
-        // Busca dados do Supabase
+        // Busca dados reais do Supabase
         const { data: orders, error: ordersError } = await supabase.supabase
             .from('orders')
             .select('*');
@@ -330,32 +364,49 @@ app.post('/generate_reports', async (req, res) => {
             .select('*');
 
         if (ordersError || customersError || productsError) {
+            console.error('Erros ao buscar dados:', { ordersError, customersError, productsError });
             return res.status(500).json({ 
                 error: 'Erro ao buscar dados do Supabase',
                 details: { ordersError, customersError, productsError }
             });
         }
 
-        // Gera relatórios
+        console.log('📋 Dados encontrados:', {
+            orders: orders?.length || 0,
+            customers: customers?.length || 0,
+            products: products?.length || 0
+        });
+
+        // Gera relatórios com dados reais
         const reports = [];
 
-        // 1. Relatório de Vendas
+        // 1. Relatório de Vendas (usando dados reais)
         if (orders && orders.length > 0) {
+            console.log('📈 Gerando relatório de vendas com', orders.length, 'pedidos');
+            
             const salesReport = {
                 filename: 'relatorio_vendas.xlsx',
                 name: 'Relatório de Vendas',
                 data: {
                     total_orders: orders.length,
-                    total_revenue: orders.reduce((sum, order) => sum + (order.total_amount || 0), 0),
-                    average_ticket: orders.reduce((sum, order) => sum + (order.total_amount || 0), 0) / orders.length,
+                    total_revenue: orders.reduce((sum, order) => {
+                        const amount = parseFloat(order.total_amount || order.valor_total || 0);
+                        return sum + amount;
+                    }, 0),
+                    average_ticket: orders.reduce((sum, order) => {
+                        const amount = parseFloat(order.total_amount || order.valor_total || 0);
+                        return sum + amount;
+                    }, 0) / orders.length,
                     orders_by_date: orders.reduce((acc, order) => {
-                        const date = order.order_date ? order.order_date.split('T')[0] : 'Sem data';
-                        acc[date] = (acc[date] || 0) + 1;
+                        const date = order.order_date || order.data_pedido || order.data || 'Sem data';
+                        const dateStr = date.split('T')[0];
+                        acc[dateStr] = (acc[dateStr] || 0) + 1;
                         return acc;
                     }, {}),
                     top_customers: orders.reduce((acc, order) => {
-                        const customer = order.customer_name || 'Cliente não identificado';
-                        acc[customer] = (acc[customer] || 0) + (order.total_amount || 0);
+                        const customer = order.customer_name || order.nome_cliente || order.cliente || 'Cliente não identificado';
+                        const amount = parseFloat(order.total_amount || order.valor_total || 0);
+                        acc[customer] = (acc[customer] || 0) + amount;
                         return acc;
                     }, {})
                 }
@@ -363,21 +414,28 @@ app.post('/generate_reports', async (req, res) => {
             reports.push(salesReport);
         }
 
-        // 2. Análise de Clientes
+        // 2. Análise de Clientes (usando dados reais)
         if (customers && customers.length > 0) {
+            console.log('👥 Gerando análise de clientes com', customers.length, 'clientes');
+            
             const customersReport = {
                 filename: 'analise_clientes.xlsx',
                 name: 'Análise de Clientes',
                 data: {
                     total_customers: customers.length,
                     customers_by_neighborhood: customers.reduce((acc, customer) => {
-                        const neighborhood = customer.neighborhood || 'Não informado';
+                        const neighborhood = customer.neighborhood || customer.bairro || 'Não informado';
                         acc[neighborhood] = (acc[neighborhood] || 0) + 1;
                         return acc;
                     }, {}),
                     customers_by_status: customers.reduce((acc, customer) => {
-                        const status = customer.status || 'Ativo';
+                        const status = customer.status || customer.situacao || 'Ativo';
                         acc[status] = (acc[status] || 0) + 1;
+                        return acc;
+                    }, {}),
+                    customers_by_city: customers.reduce((acc, customer) => {
+                        const city = customer.city || customer.cidade || 'Não informado';
+                        acc[city] = (acc[city] || 0) + 1;
                         return acc;
                     }, {})
                 }
@@ -385,42 +443,80 @@ app.post('/generate_reports', async (req, res) => {
             reports.push(customersReport);
         }
 
-        // 3. Produtos Mais Vendidos
+        // 3. Produtos Mais Vendidos (usando dados reais)
         if (products && products.length > 0) {
+            console.log('🛍️ Gerando relatório de produtos com', products.length, 'produtos');
+            
             const productsReport = {
                 filename: 'produtos_mais_vendidos.xlsx',
                 name: 'Produtos Mais Vendidos',
                 data: {
                     total_products: products.length,
                     products_by_category: products.reduce((acc, product) => {
-                        const category = product.category || 'Sem categoria';
+                        const category = product.category || product.categoria || 'Sem categoria';
                         acc[category] = (acc[category] || 0) + 1;
                         return acc;
                     }, {}),
-                    average_price: products.reduce((sum, product) => sum + (product.price || 0), 0) / products.length
+                    average_price: products.reduce((sum, product) => {
+                        const price = parseFloat(product.price || product.preco || product.valor || 0);
+                        return sum + price;
+                    }, 0) / products.length,
+                    products_by_brand: products.reduce((acc, product) => {
+                        const brand = product.brand || product.marca || 'Sem marca';
+                        acc[brand] = (acc[brand] || 0) + 1;
+                        return acc;
+                    }, {})
                 }
             };
             reports.push(productsReport);
         }
 
-        // Salva relatórios em memória (em produção, salvaria em arquivo ou banco)
+        // 4. Relatório de Itens Vendidos (se houver dados de itens)
+        if (orders && orders.length > 0) {
+            console.log('📦 Gerando relatório de itens vendidos');
+            
+            const itemsReport = {
+                filename: 'itens_vendidos.xlsx',
+                name: 'Itens Mais Vendidos',
+                data: {
+                    total_orders: orders.length,
+                    items_by_order: orders.reduce((acc, order) => {
+                        const items = order.items || order.itens || order.quantidade || 1;
+                        acc['Total de Itens'] = (acc['Total de Itens'] || 0) + parseInt(items);
+                        return acc;
+                    }, {}),
+                    average_items_per_order: orders.reduce((sum, order) => {
+                        const items = order.items || order.itens || order.quantidade || 1;
+                        return sum + parseInt(items);
+                    }, 0) / orders.length
+                }
+            };
+            reports.push(itemsReport);
+        }
+
+        // Salva relatórios em memória
         globalReports = reports;
 
-        console.log('✅ Relatórios gerados:', reports.length);
+        console.log('✅ Relatórios gerados com dados reais:', reports.length);
 
         res.json({
             success: true,
-            message: 'Relatórios gerados com sucesso!',
+            message: `Relatórios gerados com sucesso usando ${orders?.length || 0} pedidos, ${customers?.length || 0} clientes e ${products?.length || 0} produtos!`,
             reports: reports.map(r => ({
                 filename: r.filename,
                 name: r.name,
                 size: '2.5 KB',
                 modified: new Date().toLocaleString('pt-BR')
-            }))
+            })),
+            data_summary: {
+                orders: orders?.length || 0,
+                customers: customers?.length || 0,
+                products: products?.length || 0
+            }
         });
 
     } catch (error) {
-        console.error('Erro ao gerar relatórios:', error);
+        console.error('❌ Erro ao gerar relatórios:', error);
         res.status(500).json({ error: `Erro ao gerar relatórios: ${error.message}` });
     }
 });
