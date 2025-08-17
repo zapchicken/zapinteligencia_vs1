@@ -1,0 +1,24 @@
+# Arquivos e pastas a serem ignorados pelo Vercel
+node_modules/
+package-lock.json
+.git/
+.gitignore
+README.md
+*.log
+logs/
+data/
+uploads/
+output/
+.env
+.env.local
+.env.*.local
+*.md
+test/
+tests/
+__tests__/
+*.test.js
+*.spec.js
+coverage/
+.nyc_output/
+.DS_Store
+Thumbs.db
