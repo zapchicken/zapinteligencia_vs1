@@ -398,6 +398,9 @@
                                                 <button type="submit" class="btn btn-success btn-lg">
                                                     <i class="fas fa-rocket"></i> Processar Dados
                                                 </button>
+                                                <button type="button" class="btn btn-primary btn-sm ms-2" onclick="generateReports()">
+                                                    <i class="fas fa-chart-bar"></i> Gerar Relatórios
+                                                </button>
                                                 <button type="button" class="btn btn-warning btn-sm ms-2" onclick="clearCache()">
                                                     <i class="fas fa-broom"></i> Limpar Cache
                                                 </button>
@@ -645,39 +648,69 @@
                     } else {
                         let html = '<div class="row">';
                         data.forEach(file => {
-                            html += `
-                                <div class="col-md-6 mb-3">
-                                    <div class="card border-success">
-                                        <div class="card-header">
-                                            <h6 class="mb-0"><i class="fas fa-file-alt"></i> ${file.name}</h6>
-                                        </div>
-                                        <div class="card-body">
-                                            <div class="row text-center">
-                                                <div class="col-6">
-                                                    <small class="text-muted">Tamanho</small><br>
-                                                    <strong>${file.size}</strong>
-                                                </div>
-                                                <div class="col-6">
-                                                    <small class="text-muted">Modificado</small><br>
-                                                    <strong>${file.modified}</strong>
-                                                </div>
+                            if (file.filename === 'generate') {
+                                // Botão para gerar relatórios
+                                html += `
+                                    <div class="col-12 mb-3">
+                                        <div class="card border-warning">
+                                            <div class="card-body text-center">
+                                                <h6><i class="fas fa-chart-bar"></i> ${file.name}</h6>
+                                                <p class="text-muted">${file.message}</p>
+                                                <button class="btn btn-primary" onclick="generateReports()">
+                                                    <i class="fas fa-chart-bar"></i> Gerar Relatórios
+                                                </button>
                                             </div>
-                                            <div class="row mt-3">
-                                                <div class="col-6">
-                                                    <button class="btn btn-info btn-sm w-100" onclick="viewFile('${file.filename}', '${file.name}')">
-                                                        <i class="fas fa-eye"></i> Visualizar
-                                                    </button>
+                                        </div>
+                                    </div>
+                                `;
+                            } else if (file.filename === 'info' || file.filename === 'error') {
+                                // Mensagem informativa ou erro
+                                html += `
+                                    <div class="col-12 mb-3">
+                                        <div class="card border-${file.filename === 'error' ? 'danger' : 'info'}">
+                                            <div class="card-body text-center">
+                                                <h6><i class="fas fa-${file.filename === 'error' ? 'exclamation-triangle' : 'info-circle'}"></i> ${file.name}</h6>
+                                                <p class="text-muted">${file.message}</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                `;
+                            } else {
+                                // Relatório normal
+                                html += `
+                                    <div class="col-md-6 mb-3">
+                                        <div class="card border-success">
+                                            <div class="card-header">
+                                                <h6 class="mb-0"><i class="fas fa-file-alt"></i> ${file.name}</h6>
+                                            </div>
+                                            <div class="card-body">
+                                                <div class="row text-center">
+                                                    <div class="col-6">
+                                                        <small class="text-muted">Tamanho</small><br>
+                                                        <strong>${file.size}</strong>
+                                                    </div>
+                                                    <div class="col-6">
+                                                        <small class="text-muted">Modificado</small><br>
+                                                        <strong>${file.modified}</strong>
+                                                    </div>
                                                 </div>
-                                                <div class="col-6">
-                                                    <a href="/download/${file.filename}" class="btn btn-success btn-sm w-100">
-                                                        <i class="fas fa-download"></i> Baixar
-                                                    </a>
+                                                <div class="row mt-3">
+                                                    <div class="col-6">
+                                                        <button class="btn btn-info btn-sm w-100" onclick="viewReport('${file.filename}')">
+                                                            <i class="fas fa-eye"></i> Visualizar
+                                                        </button>
+                                                    </div>
+                                                    <div class="col-6">
+                                                        <a href="/download_report/${file.filename}" class="btn btn-success btn-sm w-100">
+                                                            <i class="fas fa-download"></i> Baixar
+                                                        </a>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
                                     </div>
-                                </div>
-                            `;
+                                `;
+                            }
                         });
                         html += '</div>';
                         container.innerHTML = html;
@@ -924,6 +957,78 @@
             .catch(error => {
                 document.getElementById('gemini-status').innerHTML = 
                     `<div class="alert alert-danger">❌ Erro ao verificar status: ${error}</div>`;
+            });
+        }
+
+        // Função para gerar relatórios
+        function generateReports() {
+            showAlert('info', 'Gerando relatórios...');
+            
+            fetch('/generate_reports', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showAlert('success', data.message);
+                    checkFiles(); // Atualiza a lista de relatórios
+                } else {
+                    showAlert('danger', data.error || 'Erro ao gerar relatórios');
+                }
+            })
+            .catch(error => {
+                console.error('Erro ao gerar relatórios:', error);
+                showAlert('danger', 'Erro ao gerar relatórios');
+            });
+        }
+
+        // Função para visualizar relatório
+        function viewReport(filename) {
+            fetch(`/view_report/${filename}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Cria modal para mostrar o relatório
+                    const modal = document.createElement('div');
+                    modal.className = 'modal fade';
+                    modal.innerHTML = `
+                        <div class="modal-dialog modal-lg">
+                            <div class="modal-content">
+                                <div class="modal-header">
+                                    <h5 class="modal-title">${data.name}</h5>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                </div>
+                                <div class="modal-body">
+                                    ${data.html}
+                                </div>
+                                <div class="modal-footer">
+                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                                    <a href="/download_report/${filename}" class="btn btn-primary">
+                                        <i class="fas fa-download"></i> Baixar CSV
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    document.body.appendChild(modal);
+                    
+                    const modalInstance = new bootstrap.Modal(modal);
+                    modalInstance.show();
+                    
+                    // Remove o modal do DOM após fechar
+                    modal.addEventListener('hidden.bs.modal', () => {
+                        modal.remove();
+                    });
+                } else {
+                    showAlert('danger', data.error || 'Erro ao visualizar relatório');
+                }
+            })
+            .catch(error => {
+                console.error('Erro ao visualizar relatório:', error);
+                showAlert('danger', 'Erro ao visualizar relatório');
             });
         }
 

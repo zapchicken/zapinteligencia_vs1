@@ -19,6 +19,7 @@ app.use(express.static(path.join(__dirname, '../public')));
 let globalDataLoaded = false;
 let globalAI = null;
 let uploadedFiles = new Map();
+let globalReports = null; // Adicionado para armazenar relatórios gerados
 
 // Função para carregar Supabase
 function loadSupabase() {
@@ -304,6 +305,221 @@ app.get('/get_data', async (req, res) => {
     }
 });
 
+// Gera relatórios baseados nos dados do Supabase
+app.post('/generate_reports', async (req, res) => {
+    try {
+        if (!supabase.loaded) {
+            return res.status(500).json({ 
+                error: 'Supabase não configurado' 
+            });
+        }
+
+        console.log('📊 Gerando relatórios...');
+
+        // Busca dados do Supabase
+        const { data: orders, error: ordersError } = await supabase.supabase
+            .from('orders')
+            .select('*');
+
+        const { data: customers, error: customersError } = await supabase.supabase
+            .from('customers')
+            .select('*');
+
+        const { data: products, error: productsError } = await supabase.supabase
+            .from('products')
+            .select('*');
+
+        if (ordersError || customersError || productsError) {
+            return res.status(500).json({ 
+                error: 'Erro ao buscar dados do Supabase',
+                details: { ordersError, customersError, productsError }
+            });
+        }
+
+        // Gera relatórios
+        const reports = [];
+
+        // 1. Relatório de Vendas
+        if (orders && orders.length > 0) {
+            const salesReport = {
+                filename: 'relatorio_vendas.xlsx',
+                name: 'Relatório de Vendas',
+                data: {
+                    total_orders: orders.length,
+                    total_revenue: orders.reduce((sum, order) => sum + (order.total_amount || 0), 0),
+                    average_ticket: orders.reduce((sum, order) => sum + (order.total_amount || 0), 0) / orders.length,
+                    orders_by_date: orders.reduce((acc, order) => {
+                        const date = order.order_date ? order.order_date.split('T')[0] : 'Sem data';
+                        acc[date] = (acc[date] || 0) + 1;
+                        return acc;
+                    }, {}),
+                    top_customers: orders.reduce((acc, order) => {
+                        const customer = order.customer_name || 'Cliente não identificado';
+                        acc[customer] = (acc[customer] || 0) + (order.total_amount || 0);
+                        return acc;
+                    }, {})
+                }
+            };
+            reports.push(salesReport);
+        }
+
+        // 2. Análise de Clientes
+        if (customers && customers.length > 0) {
+            const customersReport = {
+                filename: 'analise_clientes.xlsx',
+                name: 'Análise de Clientes',
+                data: {
+                    total_customers: customers.length,
+                    customers_by_neighborhood: customers.reduce((acc, customer) => {
+                        const neighborhood = customer.neighborhood || 'Não informado';
+                        acc[neighborhood] = (acc[neighborhood] || 0) + 1;
+                        return acc;
+                    }, {}),
+                    customers_by_status: customers.reduce((acc, customer) => {
+                        const status = customer.status || 'Ativo';
+                        acc[status] = (acc[status] || 0) + 1;
+                        return acc;
+                    }, {})
+                }
+            };
+            reports.push(customersReport);
+        }
+
+        // 3. Produtos Mais Vendidos
+        if (products && products.length > 0) {
+            const productsReport = {
+                filename: 'produtos_mais_vendidos.xlsx',
+                name: 'Produtos Mais Vendidos',
+                data: {
+                    total_products: products.length,
+                    products_by_category: products.reduce((acc, product) => {
+                        const category = product.category || 'Sem categoria';
+                        acc[category] = (acc[category] || 0) + 1;
+                        return acc;
+                    }, {}),
+                    average_price: products.reduce((sum, product) => sum + (product.price || 0), 0) / products.length
+                }
+            };
+            reports.push(productsReport);
+        }
+
+        // Salva relatórios em memória (em produção, salvaria em arquivo ou banco)
+        globalReports = reports;
+
+        console.log('✅ Relatórios gerados:', reports.length);
+
+        res.json({
+            success: true,
+            message: 'Relatórios gerados com sucesso!',
+            reports: reports.map(r => ({
+                filename: r.filename,
+                name: r.name,
+                size: '2.5 KB',
+                modified: new Date().toLocaleString('pt-BR')
+            }))
+        });
+
+    } catch (error) {
+        console.error('Erro ao gerar relatórios:', error);
+        res.status(500).json({ error: `Erro ao gerar relatórios: ${error.message}` });
+    }
+});
+
+// Visualiza relatório
+app.get('/view_report/:filename', async (req, res) => {
+    try {
+        const filename = req.params.filename;
+        
+        if (!globalReports) {
+            return res.status(404).json({ error: 'Nenhum relatório disponível' });
+        }
+
+        const report = globalReports.find(r => r.filename === filename);
+        
+        if (!report) {
+            return res.status(404).json({ error: 'Relatório não encontrado' });
+        }
+
+        // Converte dados para HTML
+        let html = `<h2>${report.name}</h2>`;
+        html += '<table class="table table-striped">';
+        
+        for (const [key, value] of Object.entries(report.data)) {
+            html += '<tr>';
+            html += `<td><strong>${key}</strong></td>`;
+            
+            if (typeof value === 'object') {
+                html += '<td>';
+                for (const [subKey, subValue] of Object.entries(value)) {
+                    html += `<div><strong>${subKey}:</strong> ${subValue}</div>`;
+                }
+                html += '</td>';
+            } else {
+                html += `<td>${value}</td>`;
+            }
+            
+            html += '</tr>';
+        }
+        
+        html += '</table>';
+
+        res.json({
+            success: true,
+            html: html,
+            filename: filename,
+            name: report.name
+        });
+
+    } catch (error) {
+        console.error('Erro ao visualizar relatório:', error);
+        res.status(500).json({ error: `Erro ao visualizar relatório: ${error.message}` });
+    }
+});
+
+// Download de relatório
+app.get('/download_report/:filename', async (req, res) => {
+    try {
+        const filename = req.params.filename;
+        
+        if (!globalReports) {
+            return res.status(404).json({ error: 'Nenhum relatório disponível' });
+        }
+
+        const report = globalReports.find(r => r.filename === filename);
+        
+        if (!report) {
+            return res.status(404).json({ error: 'Relatório não encontrado' });
+        }
+
+        // Converte dados para CSV
+        let csv = '';
+        
+        // Cabeçalho
+        csv += 'Métrica,Valor\n';
+        
+        // Dados
+        for (const [key, value] of Object.entries(report.data)) {
+            if (typeof value === 'object') {
+                for (const [subKey, subValue] of Object.entries(value)) {
+                    csv += `"${key} - ${subKey}","${subValue}"\n`;
+                }
+            } else {
+                csv += `"${key}","${value}"\n`;
+            }
+        }
+
+        // Define headers para download
+        res.setHeader('Content-Type', 'text/csv');
+        res.setHeader('Content-Disposition', `attachment; filename="${filename.replace('.xlsx', '.csv')}"`);
+        
+        res.send(csv);
+
+    } catch (error) {
+        console.error('Erro ao baixar relatório:', error);
+        res.status(500).json({ error: `Erro ao baixar relatório: ${error.message}` });
+    }
+});
+
 // Verifica arquivos disponíveis (relatórios baseados nos dados do Supabase)
 app.get('/check_files', async (req, res) => {
     try {
@@ -328,29 +544,26 @@ app.get('/check_files', async (req, res) => {
 
         const hasData = (ordersCount || 0) > 0 || (customersCount || 0) > 0;
 
-        if (hasData) {
-            const reports = [
-                {
-                    filename: 'relatorio_vendas.xlsx',
-                    name: 'Relatório de Vendas',
-                    size: '2.5 KB',
-                    modified: new Date().toLocaleString('pt-BR')
-                },
-                {
-                    filename: 'analise_clientes.xlsx',
-                    name: 'Análise de Clientes',
-                    size: '1.8 KB',
-                    modified: new Date().toLocaleString('pt-BR')
-                },
-                {
-                    filename: 'produtos_mais_vendidos.xlsx',
-                    name: 'Produtos Mais Vendidos',
-                    size: '1.2 KB',
-                    modified: new Date().toLocaleString('pt-BR')
-                }
-            ];
+        if (hasData && globalReports) {
+            // Retorna relatórios gerados
+            const reports = globalReports.map(r => ({
+                filename: r.filename,
+                name: r.name,
+                size: '2.5 KB',
+                modified: new Date().toLocaleString('pt-BR')
+            }));
             res.json(reports);
+        } else if (hasData) {
+            // Tem dados mas não tem relatórios gerados
+            res.json([{
+                filename: 'generate',
+                name: 'Gerar Relatórios',
+                size: '0 KB',
+                modified: new Date().toLocaleString('pt-BR'),
+                message: 'Clique em "Gerar Relatórios" para criar os relatórios'
+            }]);
         } else {
+            // Não tem dados
             res.json([{
                 filename: 'info',
                 name: 'Nenhum relatório disponível',
@@ -372,6 +585,7 @@ app.post('/clear_cache', (req, res) => {
         globalDataLoaded = false;
         globalAI = null;
         uploadedFiles.clear();
+        globalReports = null; // Limpa relatórios gerados
         
         console.log('🧹 Cache limpo com sucesso');
         
