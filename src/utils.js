@@ -1,29 +1,23 @@
 const fs = require('fs-extra');
 const path = require('path');
-const winston = require('winston');
 const chalk = require('chalk');
 const moment = require('moment');
-const { LOG_CONFIG } = require('../config');
 
-// Configuração do logger
-const logger = winston.createLogger({
-    level: LOG_CONFIG.level,
-    format: winston.format.combine(
-        winston.format.timestamp(),
-        winston.format.errors({ stack: true }),
-        winston.format.json()
-    ),
-    defaultMeta: { service: 'zapinteligencia' },
-    transports: [
-        new winston.transports.File({ filename: LOG_CONFIG.file }),
-        new winston.transports.Console({
-            format: winston.format.combine(
-                winston.format.colorize(),
-                winston.format.simple()
-            )
-        })
-    ]
-});
+// Logger simples sem Winston para compatibilidade com Vercel
+const logger = {
+    info: (message, ...args) => {
+        console.log(`[INFO] ${message}`, ...args);
+    },
+    error: (message, ...args) => {
+        console.error(`[ERROR] ${message}`, ...args);
+    },
+    warn: (message, ...args) => {
+        console.warn(`[WARN] ${message}`, ...args);
+    },
+    debug: (message, ...args) => {
+        console.log(`[DEBUG] ${message}`, ...args);
+    }
+};
 
 // Função para limpar número de telefone
 const cleanPhoneNumber = (phone) => {
