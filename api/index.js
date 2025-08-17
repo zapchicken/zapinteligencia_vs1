@@ -46,6 +46,118 @@ function loadSupabase() {
     }
 }
 
+// Funções utilitárias locais (sem dependência do src/utils.js)
+const utils = {
+    // Função para limpar número de telefone
+    cleanPhoneNumber: (phone) => {
+        if (!phone || phone === '') return '';
+        
+        let cleanPhone = String(phone)
+            .replace(/[\(\)\-\s]/g, '')
+            .replace(/\D/g, '');
+        
+        if (cleanPhone === '00000000' || 
+            cleanPhone === '0000000000' || 
+            cleanPhone === '00000000000' ||
+            cleanPhone.length < 10 ||
+            cleanPhone.startsWith('000')) {
+            return '';
+        }
+        
+        return cleanPhone;
+    },
+
+    // Função para validar telefone
+    validatePhone: (phone) => {
+        const cleanPhone = utils.cleanPhoneNumber(phone);
+        return cleanPhone.length >= 10 && cleanPhone.length <= 15;
+    },
+
+    // Função para extrair primeiro nome
+    extractFirstName: (fullName) => {
+        if (!fullName || fullName === '') return '';
+        
+        let name = String(fullName).trim();
+        
+        if (name.startsWith('LT_')) {
+            const parts = name.split(' ', 2);
+            if (parts.length > 1) {
+                return parts[1];
+            }
+            return '';
+        }
+        
+        const firstName = name.split(' ')[0];
+        
+        const invalidNames = ['-', '???????', 'null', 'none', 'nan', ''];
+        if (invalidNames.includes(firstName.toLowerCase())) {
+            return '';
+        }
+        
+        return firstName;
+    },
+
+    // Função para normalizar bairro
+    normalizeNeighborhood: (bairro, neighborhoodMapping) => {
+        if (!bairro || bairro === '') return '';
+        
+        const bairroLower = String(bairro).trim().toLowerCase();
+        
+        for (const [normalized, variants] of Object.entries(neighborhoodMapping)) {
+            if (variants.includes(bairroLower)) {
+                return normalized;
+            }
+        }
+        
+        return bairroLower;
+    },
+
+    // Função para formatar telefone para WhatsApp
+    formatWhatsAppPhone: (phone) => {
+        const cleanPhone = utils.cleanPhoneNumber(phone);
+        if (!cleanPhone) return '';
+        
+        // Adiciona código do país se não tiver
+        if (cleanPhone.length === 10 || cleanPhone.length === 11) {
+            return `55${cleanPhone}`;
+        }
+        
+        return cleanPhone;
+    },
+
+    // Função para validar email
+    validateEmail: (email) => {
+        if (!email || email === '') return false;
+        
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        return emailRegex.test(String(email).toLowerCase());
+    },
+
+    // Função para formatar data
+    formatDate: (date) => {
+        if (!date) return '';
+        
+        try {
+            const d = new Date(date);
+            if (isNaN(d.getTime())) return '';
+            
+            return d.toISOString().split('T')[0];
+        } catch (error) {
+            return '';
+        }
+    },
+
+    // Função para limpar texto
+    cleanText: (text) => {
+        if (!text || text === '') return '';
+        
+        return String(text)
+            .trim()
+            .replace(/\s+/g, ' ')
+            .replace(/[^\w\s\-\.]/g, '');
+    }
+};
+
 // Carrega Supabase
 const supabase = loadSupabase();
 
