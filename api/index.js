@@ -1,5 +1,5 @@
 // 🚀 Arquivo específico para Vercel
-// Versão robusta com tratamento de erros
+// Versão otimizada para ambiente serverless
 
 const express = require('express');
 const path = require('path');
@@ -17,18 +17,44 @@ app.use(express.static(path.join(__dirname, '../public')));
 let globalProcessor = null;
 let globalDataLoaded = false;
 let globalAI = null;
+let uploadedFiles = new Map(); // Armazena arquivos em memória
 
 // Função para carregar dependências com tratamento de erro
 function loadDependencies() {
     try {
         const multer = require('multer');
         const fs = require('fs-extra');
-        const { 
-            SERVER_CONFIG, 
-            FILE_CONFIG, 
-            createDirectories 
-        } = require('../config');
-        const { logger } = require('../src/utils');
+        
+        // Configuração simplificada para Vercel
+        const FILE_CONFIG = {
+            uploadPath: '/tmp/uploads',
+            outputPath: '/tmp/output',
+            maxFileSize: 50 * 1024 * 1024, // 50MB
+            allowedExtensions: ['.csv', '.xlsx', '.xls']
+        };
+        
+        const SERVER_CONFIG = {
+            port: process.env.PORT || 3000
+        };
+        
+        // Logger simplificado para Vercel
+        const logger = {
+            info: (msg) => console.log('INFO:', msg),
+            error: (msg) => console.error('ERROR:', msg),
+            warn: (msg) => console.warn('WARN:', msg)
+        };
+        
+        // Função para criar diretórios temporários
+        const createDirectories = async () => {
+            try {
+                await fs.ensureDir(FILE_CONFIG.uploadPath);
+                await fs.ensureDir(FILE_CONFIG.outputPath);
+            } catch (error) {
+                console.log('Aviso: Não foi possível criar diretórios:', error.message);
+            }
+        };
+        
+        // Importa classes principais
         const ZapChickenProcessor = require('../src/zapchickenProcessor');
         const ZapChickenAI = require('../src/zapchickenAI');
         
@@ -69,7 +95,8 @@ app.get('/data_status', (req, res) => {
                 'Faça upload dos arquivos e processe os dados primeiro.' :
                 'Dados não carregados. Processe os dados primeiro.',
         environment: isProduction ? 'production' : 'development',
-        dependencies_loaded: deps.loaded
+        dependencies_loaded: deps.loaded,
+        files_uploaded: uploadedFiles.size
     });
 });
 
@@ -207,6 +234,14 @@ app.post('/upload', (req, res) => {
                 path: filePath
             });
 
+            // Armazena informação do arquivo em memória
+            uploadedFiles.set(fileType, {
+                filename,
+                path: filePath,
+                size: req.file.size,
+                uploadedAt: new Date()
+            });
+
             // Verifica se o arquivo foi realmente salvo
             try {
                 const exists = await deps.fs.pathExists(filePath);
@@ -242,12 +277,19 @@ app.post('/process', async (req, res) => {
     try {
         console.log('🔍 Iniciando processamento...');
         console.log('📋 Dependências carregadas:', deps.loaded);
+        console.log('📁 Arquivos carregados:', uploadedFiles.size);
         
         if (!deps.loaded) {
             console.log('❌ Dependências não carregadas:', deps.error);
             return res.status(500).json({ 
                 error: 'Dependências não carregadas. Verifique a configuração.',
                 details: deps.error
+            });
+        }
+
+        if (uploadedFiles.size === 0) {
+            return res.status(400).json({
+                error: 'Nenhum arquivo carregado. Faça upload dos arquivos primeiro.'
             });
         }
 
@@ -313,6 +355,26 @@ app.post('/process', async (req, res) => {
             details: error.stack,
             uploadPath: deps.loaded ? deps.FILE_CONFIG.uploadPath : 'Não disponível'
         });
+    }
+});
+
+// Limpa cache
+app.post('/clear_cache', (req, res) => {
+    try {
+        globalProcessor = null;
+        globalDataLoaded = false;
+        globalAI = null;
+        uploadedFiles.clear();
+        
+        console.log('🧹 Cache limpo com sucesso');
+        
+        res.json({ 
+            message: 'Cache limpo com sucesso!',
+            files_cleared: uploadedFiles.size
+        });
+    } catch (error) {
+        console.error('Erro ao limpar cache:', error);
+        res.status(500).json({ error: `Erro ao limpar cache: ${error.message}` });
     }
 });
 
