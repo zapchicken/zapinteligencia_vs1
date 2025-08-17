@@ -234,6 +234,17 @@ app.get('/download/:filename', async (req, res) => {
 // Verifica arquivos disponíveis
 app.get('/check_files', async (req, res) => {
     try {
+        // Se estiver no Vercel e não há arquivos, retorna mensagem amigável
+        if (process.env.NODE_ENV === 'production' && !globalDataLoaded) {
+            return res.json([{
+                filename: 'info',
+                name: 'Informação',
+                size: '0 KB',
+                modified: new Date().toLocaleString('pt-BR'),
+                message: 'Faça upload dos arquivos e processe os dados primeiro'
+            }]);
+        }
+
         const files = {
             'novos_clientes_google_contacts.csv': 'Novos Clientes',
             'clientes_inativos.xlsx': 'Clientes Inativos',
@@ -258,6 +269,17 @@ app.get('/check_files', async (req, res) => {
                     modified: new Date(stat.mtime).toLocaleString('pt-BR')
                 });
             }
+        }
+
+        // Se não há arquivos, retorna mensagem informativa
+        if (available.length === 0) {
+            available.push({
+                filename: 'info',
+                name: 'Nenhum relatório disponível',
+                size: '0 KB',
+                modified: new Date().toLocaleString('pt-BR'),
+                message: 'Faça upload dos arquivos e processe os dados primeiro'
+            });
         }
 
         res.json(available);
@@ -351,11 +373,16 @@ app.post('/chat_message', checkDataLoaded, async (req, res) => {
 
 // Status dos dados
 app.get('/data_status', (req, res) => {
+    const isProduction = process.env.NODE_ENV === 'production';
+    
     res.json({
         data_loaded: globalDataLoaded,
         message: globalDataLoaded ? 
             'Dados carregados e prontos para uso!' : 
-            'Dados não carregados. Processe os dados primeiro.'
+            isProduction ? 
+                'Faça upload dos arquivos e processe os dados primeiro.' :
+                'Dados não carregados. Processe os dados primeiro.',
+        environment: isProduction ? 'production' : 'development'
     });
 });
 
