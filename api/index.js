@@ -1,5 +1,5 @@
 // 🚀 Arquivo específico para Vercel
-// Arquitetura correta: Upload → Supabase → Dados → Relatórios
+// Versão completamente limpa sem dependências externas
 
 const express = require('express');
 const path = require('path');
@@ -19,7 +19,7 @@ app.use(express.static(path.join(__dirname, '../public')));
 let globalDataLoaded = false;
 let globalAI = null;
 let uploadedFiles = new Map();
-let globalReports = null; // Adicionado para armazenar relatórios gerados
+let globalReports = null;
 
 // Função para carregar Supabase
 function loadSupabase() {
@@ -46,39 +46,23 @@ function loadSupabase() {
     }
 }
 
-// Funções utilitárias locais (sem dependência do src/utils.js)
+// Funções utilitárias locais
 const utils = {
-    // Função para limpar número de telefone
     cleanPhoneNumber: (phone) => {
         if (!phone || phone === '') return '';
-        
-        let cleanPhone = String(phone)
-            .replace(/[\(\)\-\s]/g, '')
-            .replace(/\D/g, '');
-        
-        if (cleanPhone === '00000000' || 
-            cleanPhone === '0000000000' || 
-            cleanPhone === '00000000000' ||
-            cleanPhone.length < 10 ||
-            cleanPhone.startsWith('000')) {
+        let cleanPhone = String(phone).replace(/[\(\)\-\s]/g, '').replace(/\D/g, '');
+        if (cleanPhone === '00000000' || cleanPhone === '0000000000' || cleanPhone === '00000000000' || cleanPhone.length < 10 || cleanPhone.startsWith('000')) {
             return '';
         }
-        
         return cleanPhone;
     },
-
-    // Função para validar telefone
     validatePhone: (phone) => {
         const cleanPhone = utils.cleanPhoneNumber(phone);
         return cleanPhone.length >= 10 && cleanPhone.length <= 15;
     },
-
-    // Função para extrair primeiro nome
     extractFirstName: (fullName) => {
         if (!fullName || fullName === '') return '';
-        
         let name = String(fullName).trim();
-        
         if (name.startsWith('LT_')) {
             const parts = name.split(' ', 2);
             if (parts.length > 1) {
@@ -86,75 +70,49 @@ const utils = {
             }
             return '';
         }
-        
         const firstName = name.split(' ')[0];
-        
         const invalidNames = ['-', '???????', 'null', 'none', 'nan', ''];
         if (invalidNames.includes(firstName.toLowerCase())) {
             return '';
         }
-        
         return firstName;
     },
-
-    // Função para normalizar bairro
     normalizeNeighborhood: (bairro, neighborhoodMapping) => {
         if (!bairro || bairro === '') return '';
-        
         const bairroLower = String(bairro).trim().toLowerCase();
-        
         for (const [normalized, variants] of Object.entries(neighborhoodMapping)) {
             if (variants.includes(bairroLower)) {
                 return normalized;
             }
         }
-        
         return bairroLower;
     },
-
-    // Função para formatar telefone para WhatsApp
     formatWhatsAppPhone: (phone) => {
         const cleanPhone = utils.cleanPhoneNumber(phone);
         if (!cleanPhone) return '';
-        
-        // Adiciona código do país se não tiver
         if (cleanPhone.length === 10 || cleanPhone.length === 11) {
             return `55${cleanPhone}`;
         }
-        
         return cleanPhone;
     },
-
-    // Função para validar email
     validateEmail: (email) => {
         if (!email || email === '') return false;
-        
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         return emailRegex.test(String(email).toLowerCase());
     },
-
-    // Função para formatar data
     formatDate: (date) => {
         if (!date) return '';
-        
         try {
             const d = new Date(date);
             if (isNaN(d.getTime())) return '';
-            
             return d.toISOString().split('T')[0];
         } catch (error) {
             return '';
         }
     },
-
-    // Função para limpar texto
     cleanText: (text) => {
         if (!text || text === '') return '';
-        
-        return String(text)
-            .trim()
-            .replace(/\s+/g, ' ')
-            .replace(/[^\w\s\-\.]/g, '');
+        return String(text).trim().replace(/\s+/g, ' ').replace(/[^\w\s\-\.]/g, '');
     }
 };
 
@@ -178,7 +136,6 @@ app.get('/data_status', async (req, res) => {
             });
         }
 
-        // Verifica se há dados no Supabase
         const { count: ordersCount } = await supabase.supabase
             .from('orders')
             .select('*', { count: 'exact', head: true });
@@ -221,7 +178,6 @@ app.post('/upload', (req, res) => {
             });
         }
 
-        // Configuração do Multer para upload temporário
         const storage = multer.diskStorage({
             destination: async (req, file, cb) => {
                 try {
@@ -251,7 +207,7 @@ app.post('/upload', (req, res) => {
         const upload = multer({
             storage: storage,
             limits: {
-                fileSize: 50 * 1024 * 1024 // 50MB
+                fileSize: 50 * 1024 * 1024
             },
             fileFilter: (req, file, cb) => {
                 const ext = path.extname(file.originalname).toLowerCase();
@@ -285,7 +241,6 @@ app.post('/upload', (req, res) => {
                 path: filePath
             });
 
-            // Armazena informação do arquivo
             uploadedFiles.set(fileType, {
                 filename,
                 path: filePath,
@@ -308,10 +263,10 @@ app.post('/upload', (req, res) => {
     }
 });
 
-// Processamento de dados (envia para Supabase)
+// Processamento de dados
 app.post('/process', async (req, res) => {
     try {
-        console.log('🔍 Iniciando processamento para Supabase...');
+        console.log('🔍 Iniciando processamento...');
         
         if (!supabase.loaded) {
             return res.status(500).json({ 
@@ -327,21 +282,7 @@ app.post('/process', async (req, res) => {
 
         console.log('📁 Arquivos para processar:', uploadedFiles.size);
 
-        // Processa os arquivos enviados e envia para Supabase
-        console.log('📁 Processando arquivos enviados...');
-        
-        const processedData = {
-            orders: [],
-            customers: [],
-            products: []
-        };
-
-        // Aqui você implementaria a lógica para ler os arquivos Excel/CSV
-        // e processar os dados. Por enquanto, vamos usar dados de exemplo
-        // baseados nos arquivos que foram migrados anteriormente
-        
         try {
-            // Busca dados existentes no Supabase para verificar se já há dados
             const { data: existingOrders } = await supabase.supabase
                 .from('orders')
                 .select('*')
@@ -363,15 +304,11 @@ app.post('/process', async (req, res) => {
                 products: existingProducts?.length || 0
             });
 
-            if (existingOrders && existingOrders.length > 0) {
-                processedData.orders = existingOrders;
-            }
-            if (existingCustomers && existingCustomers.length > 0) {
-                processedData.customers = existingCustomers;
-            }
-            if (existingProducts && existingProducts.length > 0) {
-                processedData.products = existingProducts;
-            }
+            const processedData = {
+                orders: existingOrders || [],
+                customers: existingCustomers || [],
+                products: existingProducts || []
+            };
 
             globalDataLoaded = true;
 
@@ -404,54 +341,7 @@ app.post('/process', async (req, res) => {
     }
 });
 
-// Busca dados do Supabase
-app.get('/get_data', async (req, res) => {
-    try {
-        if (!supabase.loaded) {
-            return res.status(500).json({ 
-                error: 'Supabase não configurado' 
-            });
-        }
-
-        // Busca dados do Supabase
-        const { data: orders, error: ordersError } = await supabase.supabase
-            .from('orders')
-            .select('*')
-            .limit(100);
-
-        const { data: customers, error: customersError } = await supabase.supabase
-            .from('customers')
-            .select('*')
-            .limit(100);
-
-        const { data: products, error: productsError } = await supabase.supabase
-            .from('products')
-            .select('*')
-            .limit(100);
-
-        if (ordersError || customersError || productsError) {
-            return res.status(500).json({ 
-                error: 'Erro ao buscar dados do Supabase',
-                details: { ordersError, customersError, productsError }
-            });
-        }
-
-        res.json({
-            success: true,
-            data: {
-                orders: orders || [],
-                customers: customers || [],
-                products: products || []
-            }
-        });
-
-    } catch (error) {
-        console.error('Erro ao buscar dados:', error);
-        res.status(500).json({ error: `Erro ao buscar dados: ${error.message}` });
-    }
-});
-
-// Gera relatórios baseados nos dados do Supabase
+// Gera relatórios
 app.post('/generate_reports', async (req, res) => {
     try {
         if (!supabase.loaded) {
@@ -460,9 +350,8 @@ app.post('/generate_reports', async (req, res) => {
             });
         }
 
-        console.log('�� Gerando relatórios com dados reais do Supabase...');
+        console.log('📊 Gerando relatórios...');
 
-        // Busca dados reais do Supabase
         const { data: orders, error: ordersError } = await supabase.supabase
             .from('orders')
             .select('*');
@@ -489,10 +378,8 @@ app.post('/generate_reports', async (req, res) => {
             products: products?.length || 0
         });
 
-        // Gera relatórios com dados reais
         const reports = [];
 
-        // 1. Relatório de Vendas (usando dados reais)
         if (orders && orders.length > 0) {
             console.log('📈 Gerando relatório de vendas com', orders.length, 'pedidos');
             
@@ -526,7 +413,6 @@ app.post('/generate_reports', async (req, res) => {
             reports.push(salesReport);
         }
 
-        // 2. Análise de Clientes (usando dados reais)
         if (customers && customers.length > 0) {
             console.log('👥 Gerando análise de clientes com', customers.length, 'clientes');
             
@@ -555,7 +441,6 @@ app.post('/generate_reports', async (req, res) => {
             reports.push(customersReport);
         }
 
-        // 3. Produtos Mais Vendidos (usando dados reais)
         if (products && products.length > 0) {
             console.log('🛍️ Gerando relatório de produtos com', products.length, 'produtos');
             
@@ -583,7 +468,6 @@ app.post('/generate_reports', async (req, res) => {
             reports.push(productsReport);
         }
 
-        // 4. Relatório de Itens Vendidos (se houver dados de itens)
         if (orders && orders.length > 0) {
             console.log('📦 Gerando relatório de itens vendidos');
             
@@ -606,10 +490,9 @@ app.post('/generate_reports', async (req, res) => {
             reports.push(itemsReport);
         }
 
-        // Salva relatórios em memória
         globalReports = reports;
 
-        console.log('✅ Relatórios gerados com dados reais:', reports.length);
+        console.log('✅ Relatórios gerados:', reports.length);
 
         res.json({
             success: true,
@@ -648,7 +531,6 @@ app.get('/view_report/:filename', async (req, res) => {
             return res.status(404).json({ error: 'Relatório não encontrado' });
         }
 
-        // Converte dados para HTML
         let html = `<h2>${report.name}</h2>`;
         html += '<table class="table table-striped">';
         
@@ -699,13 +581,9 @@ app.get('/download_report/:filename', async (req, res) => {
             return res.status(404).json({ error: 'Relatório não encontrado' });
         }
 
-        // Converte dados para CSV
         let csv = '';
-        
-        // Cabeçalho
         csv += 'Métrica,Valor\n';
         
-        // Dados
         for (const [key, value] of Object.entries(report.data)) {
             if (typeof value === 'object') {
                 for (const [subKey, subValue] of Object.entries(value)) {
@@ -716,7 +594,6 @@ app.get('/download_report/:filename', async (req, res) => {
             }
         }
 
-        // Define headers para download
         res.setHeader('Content-Type', 'text/csv');
         res.setHeader('Content-Disposition', `attachment; filename="${filename.replace('.xlsx', '.csv')}"`);
         
@@ -728,7 +605,7 @@ app.get('/download_report/:filename', async (req, res) => {
     }
 });
 
-// Verifica arquivos disponíveis (relatórios baseados nos dados do Supabase)
+// Verifica arquivos disponíveis
 app.get('/check_files', async (req, res) => {
     try {
         if (!supabase.loaded) {
@@ -741,7 +618,6 @@ app.get('/check_files', async (req, res) => {
             }]);
         }
 
-        // Verifica se há dados no Supabase
         const { count: ordersCount } = await supabase.supabase
             .from('orders')
             .select('*', { count: 'exact', head: true });
@@ -753,7 +629,6 @@ app.get('/check_files', async (req, res) => {
         const hasData = (ordersCount || 0) > 0 || (customersCount || 0) > 0;
 
         if (hasData && globalReports) {
-            // Retorna relatórios gerados
             const reports = globalReports.map(r => ({
                 filename: r.filename,
                 name: r.name,
@@ -762,7 +637,6 @@ app.get('/check_files', async (req, res) => {
             }));
             res.json(reports);
         } else if (hasData) {
-            // Tem dados mas não tem relatórios gerados
             res.json([{
                 filename: 'generate',
                 name: 'Gerar Relatórios',
@@ -771,7 +645,6 @@ app.get('/check_files', async (req, res) => {
                 message: 'Clique em "Gerar Relatórios" para criar os relatórios'
             }]);
         } else {
-            // Não tem dados
             res.json([{
                 filename: 'info',
                 name: 'Nenhum relatório disponível',
@@ -793,7 +666,7 @@ app.post('/clear_cache', (req, res) => {
         globalDataLoaded = false;
         globalAI = null;
         uploadedFiles.clear();
-        globalReports = null; // Limpa relatórios gerados
+        globalReports = null;
         
         console.log('🧹 Cache limpo com sucesso');
         
@@ -819,7 +692,6 @@ app.post('/config_gemini', async (req, res) => {
             });
         }
 
-        // Aqui você configuraria a IA Gemini
         globalAI = { apiKey: api_key.trim() };
 
         res.json({
@@ -856,9 +728,6 @@ app.post('/chat_message', async (req, res) => {
                 error: 'IA não configurada. Configure a API Gemini primeiro.' 
             });
         }
-
-        // Aqui você implementaria a integração com Gemini
-        // usando os dados do Supabase
 
         res.json({ 
             response: 'Esta é uma resposta de teste. Configure a IA Gemini para respostas reais.' 

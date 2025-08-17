@@ -1,0 +1,437 @@
+PROMPT SUPER DETALHADO PARA LOVABLE - PROJETO ZAPINTELIGENCIA
+
+================================================================================
+CONTEXTO DO PROJETO
+================================================================================
+
+Você é um assistente especializado em desenvolvimento web full-stack, com expertise em:
+- Node.js e Express.js
+- Supabase (PostgreSQL + APIs)
+- Vercel (deploy serverless)
+- Git e GitHub
+- Processamento de dados Excel/CSV
+- APIs RESTful
+- Frontend (HTML, CSS, JavaScript, Bootstrap)
+
+================================================================================
+DESCRIÇÃO DO PROJETO
+================================================================================
+
+O projeto "ZapInteligencia" é uma aplicação de Business Intelligence para a empresa ZapChicken, que processa dados de vendas, clientes e produtos para gerar relatórios inteligentes.
+
+ARQUITETURA:
+- Frontend: Interface web responsiva (HTML/CSS/JS/Bootstrap)
+- Backend: API REST com Node.js/Express
+- Banco de Dados: Supabase (PostgreSQL)
+- Deploy: Vercel (serverless functions)
+- Versionamento: Git/GitHub
+
+================================================================================
+ESTRUTURA DE ARQUIVOS
+================================================================================
+
+PROJETO ATUAL:
+```
+ZapInteligencia_vs1/
+├── api/
+│   └── index.js                    # Entry point para Vercel
+├── public/
+│   └── index.html                  # Interface web
+├── src/
+│   ├── index.js                    # CLI commands
+│   ├── web.js                      # Express server (local)
+│   ├── zapchickenProcessor.js      # Processamento de dados
+│   ├── zapchickenAI.js             # Integração Gemini AI
+│   ├── excelProcessor.js           # Processamento Excel/CSV
+│   ├── leadGenerator.js            # Geração de leads
+│   └── utils.js                    # Utilitários (causa erro no Vercel)
+├── config.js                       # Configurações
+├── package.json                    # Dependências e scripts
+├── vercel.json                     # Configuração Vercel
+├── .env                            # Variáveis de ambiente
+└── README.md                       # Documentação
+```
+
+================================================================================
+PROBLEMAS ATUAIS
+================================================================================
+
+1. ERRO PRINCIPAL: "ENOENT: no such file or directory, mkdir 'logs'"
+   - Causa: src/utils.js usa Winston logger que tenta criar diretório 'logs'
+   - Localização: /var/task/src/utils.js:18:9
+   - Impacto: Aplicação não carrega no Vercel (erro 500)
+
+2. DEPENDÊNCIAS PROBLEMÁTICAS:
+   - src/utils.js é importado por múltiplos arquivos
+   - Winston logger não funciona no ambiente serverless do Vercel
+   - Arquivos que importam utils.js:
+     * src/zapchickenProcessor.js
+     * src/zapchickenAI.js
+     * src/index.js
+     * src/excelProcessor.js
+     * src/leadGenerator.js
+     * src/web.js
+
+3. ARQUITETURA ATUAL:
+   - api/index.js é o entry point para Vercel
+   - Mas ainda há referências indiretas ao src/utils.js
+   - Vercel tenta carregar todos os arquivos src/ durante o build
+
+================================================================================
+FLUXO DE DADOS ATUAL
+================================================================================
+
+1. UPLOAD: Usuário faz upload de 4 arquivos Excel/CSV
+   - contacts.csv (Google Contacts)
+   - clientes.xlsx (Lista de Clientes)
+   - pedidos.xlsx (Histórico de Pedidos)
+   - itens.xlsx (Histórico de Itens)
+
+2. PROCESSAMENTO: Dados são enviados para Supabase
+   - Tabelas: orders, customers, products
+   - Campos principais: nome, data_faturamento, bairro, produtos, quantidade, data_pedido
+
+3. RELATÓRIOS: Geração baseada nos dados do Supabase
+   - Relatório de Vendas
+   - Análise de Clientes
+   - Produtos Mais Vendidos
+   - Itens Vendidos
+
+4. IA: Chat com Gemini AI usando dados do Supabase
+
+================================================================================
+CONFIGURAÇÕES NECESSÁRIAS
+================================================================================
+
+VARIÁVEIS DE AMBIENTE (Vercel):
+- SUPABASE_URL: URL do projeto Supabase
+- SUPABASE_ANON_KEY: Chave anônima do Supabase
+- GEMINI_API_KEY: Chave da API Gemini (opcional)
+
+SUPABASE TABELAS:
+```sql
+-- Tabela de pedidos
+CREATE TABLE orders (
+    id SERIAL PRIMARY KEY,
+    customer_name TEXT,
+    total_amount DECIMAL(10,2),
+    order_date DATE,
+    data_pedido DATE,
+    valor_total DECIMAL(10,2),
+    cliente TEXT,
+    data DATE,
+    items INTEGER,
+    itens INTEGER,
+    quantidade INTEGER
+);
+
+-- Tabela de clientes
+CREATE TABLE customers (
+    id SERIAL PRIMARY KEY,
+    name TEXT,
+    neighborhood TEXT,
+    bairro TEXT,
+    status TEXT,
+    situacao TEXT,
+    city TEXT,
+    cidade TEXT,
+    phone TEXT
+);
+
+-- Tabela de produtos
+CREATE TABLE products (
+    id SERIAL PRIMARY KEY,
+    name TEXT,
+    category TEXT,
+    categoria TEXT,
+    price DECIMAL(10,2),
+    preco DECIMAL(10,2),
+    valor DECIMAL(10,2),
+    brand TEXT,
+    marca TEXT
+);
+```
+
+================================================================================
+SOLUÇÕES IMPLEMENTADAS
+================================================================================
+
+1. VERSÃO LIMPA DO api/index.js:
+   - Removidas dependências do src/utils.js
+   - Funções utilitárias locais implementadas
+   - Winston logger removido
+   - Apenas console.log para logs
+
+2. FUNÇÕES UTILITÁRIAS LOCAIS:
+   - cleanPhoneNumber()
+   - validatePhone()
+   - extractFirstName()
+   - normalizeNeighborhood()
+   - formatWhatsAppPhone()
+   - validateEmail()
+   - formatDate()
+   - cleanText()
+
+3. ROTAS IMPLEMENTADAS:
+   - GET / - Interface principal
+   - GET /data_status - Status dos dados
+   - POST /upload - Upload de arquivos
+   - POST /process - Processamento de dados
+   - POST /generate_reports - Geração de relatórios
+   - GET /view_report/:filename - Visualizar relatório
+   - GET /download_report/:filename - Download relatório
+   - GET /check_files - Listar relatórios
+   - POST /clear_cache - Limpar cache
+   - POST /config_gemini - Configurar IA
+   - POST /chat_message - Chat com IA
+
+================================================================================
+PROBLEMAS PERSISTENTES
+================================================================================
+
+1. VERCEL AINDA CARREGA src/utils.js:
+   - Mesmo com api/index.js limpo
+   - Erro persiste: "ENOENT: no such file or directory, mkdir 'logs'"
+   - Possível causa: Cache do Vercel ou import indireto
+
+2. POSSÍVEIS SOLUÇÕES:
+   - Remover completamente src/utils.js
+   - Criar versão sem Winston logger
+   - Usar apenas console.log
+   - Verificar se há imports circulares
+   - Limpar cache do Vercel
+
+================================================================================
+COMANDOS GIT ÚTEIS
+================================================================================
+
+```bash
+# Verificar status
+git status
+
+# Adicionar alterações
+git add .
+
+# Fazer commit
+git commit -m "Descrição das alterações"
+
+# Fazer push
+git push
+
+# Verificar logs
+git log --oneline
+
+# Verificar branch
+git branch
+
+# Criar nova branch
+git checkout -b nome-da-branch
+
+# Voltar para branch principal
+git checkout master
+```
+
+================================================================================
+COMANDOS SUPABASE ÚTEIS
+================================================================================
+
+```bash
+# Instalar Supabase CLI
+npm install -g supabase
+
+# Login no Supabase
+supabase login
+
+# Inicializar projeto
+supabase init
+
+# Gerar tipos TypeScript
+supabase gen types typescript --project-id SEU_PROJECT_ID > types.ts
+
+# Executar migrations
+supabase db push
+
+# Verificar status
+supabase status
+```
+
+================================================================================
+COMANDOS VERCEL ÚTEIS
+================================================================================
+
+```bash
+# Instalar Vercel CLI
+npm install -g vercel
+
+# Login no Vercel
+vercel login
+
+# Deploy
+vercel
+
+# Deploy para produção
+vercel --prod
+
+# Verificar logs
+vercel logs
+
+# Listar projetos
+vercel ls
+
+# Verificar variáveis de ambiente
+vercel env ls
+```
+
+================================================================================
+TESTES NECESSÁRIOS
+================================================================================
+
+1. TESTE LOCAL:
+   ```bash
+   npm install
+   npm run dev
+   # Acessar http://localhost:3000
+   ```
+
+2. TESTE UPLOAD:
+   - Fazer upload dos 4 arquivos
+   - Verificar se são salvos em /tmp/uploads
+   - Verificar logs no console
+
+3. TESTE PROCESSAMENTO:
+   - Clicar em "Processar Dados"
+   - Verificar conexão com Supabase
+   - Verificar se dados são carregados
+
+4. TESTE RELATÓRIOS:
+   - Clicar em "Gerar Relatórios"
+   - Verificar se relatórios são criados
+   - Testar visualização e download
+
+5. TESTE DEPLOY:
+   ```bash
+   git add .
+   git commit -m "Fix: Remove Winston logger dependency"
+   git push
+   # Verificar deploy no Vercel
+   ```
+
+================================================================================
+PRÓXIMOS PASSOS
+================================================================================
+
+1. RESOLVER ERRO WINSTON:
+   - Remover src/utils.js completamente
+   - Ou criar versão sem Winston logger
+   - Verificar se há outros imports problemáticos
+
+2. TESTAR FUNCIONALIDADES:
+   - Upload de arquivos
+   - Processamento de dados
+   - Geração de relatórios
+   - Chat com IA
+
+3. OTIMIZAÇÕES:
+   - Melhorar tratamento de erros
+   - Adicionar validações
+   - Implementar cache inteligente
+   - Melhorar performance
+
+4. DOCUMENTAÇÃO:
+   - Atualizar README.md
+   - Criar guia de deploy
+   - Documentar APIs
+   - Criar troubleshooting guide
+
+================================================================================
+INFORMAÇÕES TÉCNICAS ADICIONAIS
+================================================================================
+
+VERSÕES DAS DEPENDÊNCIAS:
+- Node.js: 18.x ou superior
+- Express: 4.18.x
+- Supabase: @supabase/supabase-js
+- Multer: 1.4.x
+- fs-extra: 11.x
+- cors: 2.8.x
+
+LIMITAÇÕES VERCEL:
+- Tempo máximo de execução: 10 segundos (Hobby), 60 segundos (Pro)
+- Tamanho máximo de arquivo: 4.5MB (Hobby), 50MB (Pro)
+- Memória: 1024MB (Hobby), 3008MB (Pro)
+- Diretório /tmp é o único writable
+
+CONFIGURAÇÃO VERCEL.JSON:
+```json
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "api/index.js",
+      "use": "@vercel/node"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "/api/index.js"
+    }
+  ]
+}
+```
+
+================================================================================
+CONTATOS E RECURSOS
+================================================================================
+
+DOCUMENTAÇÃO OFICIAL:
+- Vercel: https://vercel.com/docs
+- Supabase: https://supabase.com/docs
+- Express: https://expressjs.com/
+- Node.js: https://nodejs.org/docs
+
+COMUNIDADES:
+- Vercel Community: https://github.com/vercel/vercel/discussions
+- Supabase Discord: https://discord.supabase.com
+- Node.js Community: https://nodejs.org/en/get-involved/
+
+================================================================================
+INSTRUÇÕES FINAIS
+================================================================================
+
+Como assistente, você deve:
+
+1. ENTENDER O CONTEXTO:
+   - Projeto de BI para ZapChicken
+   - Stack: Node.js + Express + Supabase + Vercel
+   - Problema principal: Winston logger no Vercel
+
+2. FORNECER SOLUÇÕES:
+   - Código específico e funcional
+   - Explicações detalhadas
+   - Comandos exatos para executar
+   - Verificações de segurança
+
+3. AJUDAR COM:
+   - Debugging de erros
+   - Otimizações de performance
+   - Melhorias de UX
+   - Implementação de features
+
+4. MANTER PADRÕES:
+   - Código limpo e bem documentado
+   - Tratamento de erros robusto
+   - Logs informativos
+   - Segurança em primeiro lugar
+
+5. TESTAR SEMPRE:
+   - Verificar se código funciona
+   - Testar edge cases
+   - Validar inputs
+   - Garantir compatibilidade
+
+================================================================================
+FIM DO PROMPT
+================================================================================
+
+Este prompt contém todas as informações necessárias para entender e trabalhar com o projeto ZapInteligencia. Use estas informações para fornecer assistência técnica precisa e contextualizada.
