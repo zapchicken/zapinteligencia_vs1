@@ -488,11 +488,12 @@ app.use((req, res) => {
     res.status(404).json({ error: 'Rota não encontrada' });
 });
 
-// Inicia o servidor
+// Inicia o servidor apenas em desenvolvimento
 const PORT = process.env.PORT || SERVER_CONFIG.port;
 
-app.listen(PORT, () => {
-    console.log(chalk.cyan(`
+if (process.env.NODE_ENV !== 'production') {
+    app.listen(PORT, () => {
+        console.log(chalk.cyan(`
 ╔══════════════════════════════════════════════════════════════╗
 ║                    🚀 ZAPINTELIGENCIA 🚀                     ║
 ║                                                              ║
@@ -500,14 +501,15 @@ app.listen(PORT, () => {
 ║    Servidor Web iniciado com sucesso!                       ║
 ║                                                              ║
 ╚══════════════════════════════════════════════════════════════╝
-    `));
-    
-    console.log(chalk.green(`🌐 Servidor rodando em: http://localhost:${PORT}`));
-    console.log(chalk.yellow('📱 Acesse a interface web para começar'));
-    console.log(chalk.yellow('🔄 Pressione Ctrl+C para parar o servidor'));
-    
-    logger.info(`Servidor web iniciado na porta ${PORT}`);
-});
+        `));
+        
+        console.log(chalk.green(`🌐 Servidor rodando em: http://localhost:${PORT}`));
+        console.log(chalk.yellow('📱 Acesse a interface web para começar'));
+        console.log(chalk.yellow('🔄 Pressione Ctrl+C para parar o servidor'));
+        
+        logger.info(`Servidor web iniciado na porta ${PORT}`);
+    });
+}
 
 // Tratamento de encerramento gracioso
 process.on('SIGINT', () => {
