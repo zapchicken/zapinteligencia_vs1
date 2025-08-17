@@ -2,8 +2,10 @@
 // Este script migra os dados dos arquivos Excel/CSV para o Supabase
 
 import { createClient } from '@supabase/supabase-js'
-import { ZapChickenProcessor } from './src/zapchickenProcessor.js'
-import { logger } from './src/utils.js'
+import pkg from './src/zapchickenProcessor.js'
+const { ZapChickenProcessor } = pkg
+import utils from './src/utils.js'
+const { logger } = utils
 
 // Configuração do Supabase
 const supabaseUrl = process.env.SUPABASE_URL
@@ -419,12 +421,13 @@ class DataMigrator {
 
 // 🎯 Exemplo de uso
 async function runMigration() {
+    console.log('🚀 Iniciando migração...')
+    
     const migrator = new DataMigrator()
 
     try {
-        // 1. Autenticar
-        await migrator.authenticate('admin@zapchicken.com', 'senha123')
-
+        console.log('📋 Verificando arquivos...')
+        
         // 2. Dados da empresa
         const companyData = {
             name: 'ZapChicken',
@@ -438,6 +441,9 @@ async function runMigration() {
             zip_code: '01234-567',
             gemini_api_key: process.env.GEMINI_API_KEY
         }
+
+        console.log('🏢 Dados da empresa configurados')
+        console.log('📊 Iniciando migração completa...')
 
         // 3. Executar migração
         const results = await migrator.migrateAll(companyData)

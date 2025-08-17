@@ -4,12 +4,13 @@
   "description": "Business Intelligence para ZapChicken - Versão Node.js",
   "main": "src/index.js",
   "scripts": {
-    "start": "node src/index.js",
+    "start": "node src/web.js",
     "dev": "nodemon src/index.js",
     "setup": "node src/index.js setup",
     "process": "node src/index.js process",
     "chat": "node src/index.js chat",
     "web": "node src/web.js",
+    "build": "echo 'No build step required'",
     "test": "jest"
   },
   "keywords": [
