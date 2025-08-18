@@ -45,7 +45,7 @@ const FILE_CONFIG = {
 // Configurações de logging
 const LOG_CONFIG = {
     level: process.env.LOG_LEVEL || 'info',
-    file: process.env.LOG_FILE || 'logs/app.log',
+    file: process.env.LOG_FILE || '/tmp/app.log', // Usar /tmp no Vercel
     format: '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 };
 

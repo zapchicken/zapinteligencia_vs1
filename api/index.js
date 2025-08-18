@@ -7,6 +7,9 @@ const cors = require('cors');
 const multer = require('multer');
 const fs = require('fs-extra');
 
+// Importar o processador
+const ZapChickenProcessor = require('../src/zapchickenProcessor');
+
 const app = express();
 
 // Configurações básicas
@@ -24,6 +27,10 @@ let globalReports = null;
 // Função para carregar Supabase
 function loadSupabase() {
     try {
+        console.log('🔧 Carregando Supabase...');
+        console.log('🔧 SUPABASE_URL:', process.env.SUPABASE_URL ? 'Configurado' : 'Não configurado');
+        console.log('🔧 SUPABASE_ANON_KEY:', process.env.SUPABASE_ANON_KEY ? 'Configurado' : 'Não configurado');
+        
         const { createClient } = require('@supabase/supabase-js');
         
         const supabaseUrl = process.env.SUPABASE_URL;
@@ -31,18 +38,34 @@ function loadSupabase() {
         
         if (!supabaseUrl || !supabaseKey) {
             console.log('⚠️ Variáveis do Supabase não configuradas');
-            return { loaded: false, error: 'Supabase não configurado' };
+            return { 
+                loaded: false, 
+                error: 'Supabase não configurado',
+                details: {
+                    url_missing: !supabaseUrl,
+                    key_missing: !supabaseKey
+                }
+            };
         }
         
+        console.log('🔧 Criando cliente Supabase...');
         const supabase = createClient(supabaseUrl, supabaseKey);
+        
+        console.log('✅ Supabase carregado com sucesso');
         
         return {
             supabase,
-            loaded: true
+            loaded: true,
+            url: supabaseUrl
         };
     } catch (error) {
-        console.error('Erro ao carregar Supabase:', error.message);
-        return { loaded: false, error: error.message };
+        console.error('❌ Erro ao carregar Supabase:', error.message);
+        console.error('❌ Stack trace:', error.stack);
+        return { 
+            loaded: false, 
+            error: error.message,
+            stack: error.stack
+        };
     }
 }
 
@@ -127,44 +150,128 @@ app.get('/', (req, res) => {
 // Status dos dados
 app.get('/data_status', async (req, res) => {
     try {
+        console.log('🔍 Verificando status dos dados...');
+        
         if (!supabase.loaded) {
+            console.log('❌ Supabase não carregado');
             return res.json({
                 data_loaded: false,
                 message: 'Supabase não configurado. Configure as variáveis de ambiente.',
-                environment: 'production',
-                supabase_loaded: false
+                environment: process.env.NODE_ENV || 'development',
+                supabase_loaded: false,
+                supabase_error: supabase.error,
+                supabase_details: supabase.details
             });
         }
 
-        const { count: ordersCount } = await supabase.supabase
+        console.log('🔗 Testando conexão com Supabase...');
+
+        const { count: ordersCount, error: ordersError } = await supabase.supabase
             .from('orders')
             .select('*', { count: 'exact', head: true });
 
-        const { count: customersCount } = await supabase.supabase
+        const { count: customersCount, error: customersError } = await supabase.supabase
             .from('customers')
             .select('*', { count: 'exact', head: true });
 
+        if (ordersError || customersError) {
+            console.error('❌ Erros nas consultas:', { ordersError, customersError });
+            return res.json({
+                data_loaded: false,
+                message: 'Erro ao conectar com Supabase.',
+                environment: process.env.NODE_ENV || 'development',
+                supabase_loaded: true,
+                connection_errors: { ordersError, customersError }
+            });
+        }
+
         const hasData = (ordersCount || 0) > 0 || (customersCount || 0) > 0;
+
+        console.log('✅ Status verificado:', { ordersCount, customersCount, hasData });
 
         res.json({
             data_loaded: hasData,
             message: hasData ? 
                 'Dados carregados e prontos para uso!' : 
                 'Faça upload dos arquivos para carregar dados no Supabase.',
-            environment: 'production',
+            environment: process.env.NODE_ENV || 'development',
             supabase_loaded: true,
             orders_count: ordersCount || 0,
-            customers_count: customersCount || 0
+            customers_count: customersCount || 0,
+            uploaded_files: Array.from(uploadedFiles.keys())
         });
 
     } catch (error) {
-        console.error('Erro ao verificar status:', error);
+        console.error('❌ Erro ao verificar status:', error);
         res.json({
             data_loaded: false,
             message: 'Erro ao verificar dados no Supabase.',
-            environment: 'production',
+            environment: process.env.NODE_ENV || 'development',
             supabase_loaded: supabase.loaded,
-            error: error.message
+            error: error.message,
+            stack: error.stack
+        });
+    }
+});
+
+// Endpoint de diagnóstico
+app.get('/diagnostic', async (req, res) => {
+    try {
+        console.log('🔍 Executando diagnóstico do sistema...');
+        
+        const diagnostic = {
+            timestamp: new Date().toISOString(),
+            environment: process.env.NODE_ENV || 'development',
+            node_version: process.version,
+            platform: process.platform,
+            supabase: {
+                loaded: supabase.loaded,
+                error: supabase.error,
+                details: supabase.details,
+                url: supabase.url
+            },
+            environment_variables: {
+                SUPABASE_URL: process.env.SUPABASE_URL ? 'Configurado' : 'Não configurado',
+                SUPABASE_ANON_KEY: process.env.SUPABASE_ANON_KEY ? 'Configurado' : 'Não configurado',
+                GEMINI_API_KEY: process.env.GEMINI_API_KEY ? 'Configurado' : 'Não configurado',
+                NODE_ENV: process.env.NODE_ENV || 'development',
+                PORT: process.env.PORT || '3000'
+            },
+            uploaded_files: Array.from(uploadedFiles.keys()),
+            global_data_loaded: globalDataLoaded,
+            global_ai_configured: !!globalAI
+        };
+
+        // Testar conexão Supabase se estiver carregado
+        if (supabase.loaded) {
+            try {
+                const { data, error } = await supabase.supabase
+                    .from('orders')
+                    .select('count', { count: 'exact', head: true });
+                
+                diagnostic.supabase_connection = {
+                    success: !error,
+                    error: error,
+                    data: data
+                };
+            } catch (connectionError) {
+                diagnostic.supabase_connection = {
+                    success: false,
+                    error: connectionError.message,
+                    stack: connectionError.stack
+                };
+            }
+        }
+
+        console.log('✅ Diagnóstico concluído');
+        res.json(diagnostic);
+
+    } catch (error) {
+        console.error('❌ Erro no diagnóstico:', error);
+        res.status(500).json({
+            error: 'Erro ao executar diagnóstico',
+            message: error.message,
+            stack: error.stack
         });
     }
 });
@@ -267,76 +374,239 @@ app.post('/upload', (req, res) => {
 app.post('/process', async (req, res) => {
     try {
         console.log('🔍 Iniciando processamento...');
+        console.log('📋 Request body:', req.body);
+        console.log('🔧 Environment:', process.env.NODE_ENV);
         
+        // Verificar se o Supabase está configurado
         if (!supabase.loaded) {
+            console.error('❌ Supabase não configurado');
             return res.status(500).json({ 
-                error: 'Supabase não configurado. Configure as variáveis de ambiente.' 
+                error: 'Supabase não configurado. Configure as variáveis de ambiente.',
+                details: {
+                    supabase_url: process.env.SUPABASE_URL ? 'Configurado' : 'Não configurado',
+                    supabase_key: process.env.SUPABASE_ANON_KEY ? 'Configurado' : 'Não configurado'
+                }
             });
         }
 
+        // Verificar se há arquivos carregados
         if (uploadedFiles.size === 0) {
+            console.log('⚠️ Nenhum arquivo carregado');
             return res.status(400).json({
-                error: 'Nenhum arquivo carregado. Faça upload dos arquivos primeiro.'
+                error: 'Nenhum arquivo carregado. Faça upload dos arquivos primeiro.',
+                uploaded_files: Array.from(uploadedFiles.keys())
             });
         }
 
         console.log('📁 Arquivos para processar:', uploadedFiles.size);
+        console.log('📁 Arquivos:', Array.from(uploadedFiles.keys()));
 
+        // Testar conexão com Supabase
         try {
-            const { data: existingOrders } = await supabase.supabase
+            console.log('🔗 Testando conexão com Supabase...');
+            
+            const { data: testData, error: testError } = await supabase.supabase
                 .from('orders')
-                .select('*')
-                .limit(5);
+                .select('count', { count: 'exact', head: true });
 
-            const { data: existingCustomers } = await supabase.supabase
-                .from('customers')
-                .select('*')
-                .limit(5);
+            if (testError) {
+                console.error('❌ Erro ao testar conexão Supabase:', testError);
+                return res.status(500).json({
+                    error: 'Erro de conexão com Supabase',
+                    details: testError
+                });
+            }
 
-            const { data: existingProducts } = await supabase.supabase
-                .from('products')
-                .select('*')
-                .limit(5);
+            console.log('✅ Conexão com Supabase OK');
 
-            console.log('📊 Dados existentes no Supabase:', {
-                orders: existingOrders?.length || 0,
-                customers: existingCustomers?.length || 0,
-                products: existingProducts?.length || 0
+        } catch (connectionError) {
+            console.error('❌ Erro de conexão:', connectionError);
+            return res.status(500).json({
+                error: 'Erro de conexão com Supabase',
+                details: connectionError.message
+            });
+        }
+
+        // Processar arquivos carregados
+        console.log('📁 Processando arquivos enviados...');
+        
+        try {
+            // Criar diretório temporário para processamento
+            const tempDir = '/tmp/zapchicken_processing';
+            await fs.ensureDir(tempDir);
+            
+            // Criar diretório para relatórios
+            const reportsDir = '/tmp/reports';
+            await fs.ensureDir(reportsDir);
+            
+            // Mover arquivos para diretório temporário com nomes que o processador reconhece
+            for (const [fileType, fileInfo] of uploadedFiles.entries()) {
+                let targetFilename;
+                
+                if (fileType === 'contacts') {
+                    targetFilename = 'contacts.csv';
+                } else if (fileType === 'clientes') {
+                    targetFilename = 'Lista-Clientes.xlsx';
+                } else if (fileType === 'pedidos') {
+                    targetFilename = 'Todos os pedidos.xlsx';
+                } else if (fileType === 'itens') {
+                    targetFilename = 'Historico_Itens_Vendidos.xlsx';
+                } else {
+                    targetFilename = `${fileType}.xlsx`;
+                }
+                
+                const tempPath = path.join(tempDir, targetFilename);
+                await fs.copy(fileInfo.path, tempPath);
+                console.log(`📁 Arquivo ${fileType} copiado como ${targetFilename} para processamento`);
+            }
+            
+            // Processar arquivos
+            const processor = new ZapChickenProcessor(tempDir, '/tmp/reports');
+            await processor.loadZapchickenFiles();
+            
+            // Processar dados
+            const contactsData = processor.processContacts();
+            const clientesData = processor.processClientes();
+            const pedidosData = processor.processPedidos();
+            const itensData = processor.processItens();
+            
+            console.log(`✅ Dados processados: ${contactsData.length} contatos, ${clientesData.length} clientes, ${pedidosData.length} pedidos, ${itensData.length} itens`);
+            
+            // Enviar dados para Supabase
+            console.log('📤 Enviando dados para Supabase...');
+            
+            if (contactsData.length > 0) {
+                const { error: contactsError } = await supabase.supabase
+                    .from('contacts')
+                    .upsert(contactsData, { onConflict: 'telefone_limpo' });
+                if (contactsError) console.error('❌ Erro ao enviar contatos:', contactsError);
+                else console.log('✅ Contatos enviados para Supabase');
+            }
+            
+            if (clientesData.length > 0) {
+                const { error: clientesError } = await supabase.supabase
+                    .from('customers')
+                    .upsert(clientesData, { onConflict: 'telefone_limpo' });
+                if (clientesError) console.error('❌ Erro ao enviar clientes:', clientesError);
+                else console.log('✅ Clientes enviados para Supabase');
+            }
+            
+            if (pedidosData.length > 0) {
+                const { error: pedidosError } = await supabase.supabase
+                    .from('orders')
+                    .upsert(pedidosData, { onConflict: 'id' });
+                if (pedidosError) console.error('❌ Erro ao enviar pedidos:', pedidosError);
+                else console.log('✅ Pedidos enviados para Supabase');
+            }
+            
+            if (itensData.length > 0) {
+                const { error: itensError } = await supabase.supabase
+                    .from('products')
+                    .upsert(itensData, { onConflict: 'id' });
+                if (itensError) console.error('❌ Erro ao enviar itens:', itensError);
+                else console.log('✅ Itens enviados para Supabase');
+            }
+            
+            // Salvar relatórios específicos
+            console.log('📊 Salvando relatórios específicos...');
+            const savedReports = await processor.saveReports();
+            console.log('✅ Relatórios salvos:', savedReports);
+            
+            // Limpar diretório temporário
+            await fs.remove(tempDir);
+            
+        } catch (processingError) {
+            console.error('❌ Erro ao processar arquivos:', processingError);
+            return res.status(500).json({
+                error: 'Erro ao processar arquivos',
+                details: processingError.message
+            });
+        }
+
+        // Buscar dados existentes
+        try {
+            console.log('📊 Buscando dados existentes...');
+
+            const [ordersResult, customersResult, productsResult] = await Promise.allSettled([
+                supabase.supabase.from('orders').select('*').limit(5),
+                supabase.supabase.from('customers').select('*').limit(5),
+                supabase.supabase.from('products').select('*').limit(5)
+            ]);
+
+            console.log('📊 Resultados das consultas:', {
+                orders: ordersResult.status,
+                customers: customersResult.status,
+                products: productsResult.status
             });
 
-            const processedData = {
-                orders: existingOrders || [],
-                customers: existingCustomers || [],
-                products: existingProducts || []
+            let existingOrders = [];
+            let existingCustomers = [];
+            let existingProducts = [];
+
+            if (ordersResult.status === 'fulfilled' && !ordersResult.value.error) {
+                existingOrders = ordersResult.value.data || [];
+                console.log('✅ Pedidos carregados:', existingOrders.length);
+            } else {
+                console.warn('⚠️ Erro ao carregar pedidos:', ordersResult.reason || ordersResult.value?.error);
+            }
+
+            if (customersResult.status === 'fulfilled' && !customersResult.value.error) {
+                existingCustomers = customersResult.value.data || [];
+                console.log('✅ Clientes carregados:', existingCustomers.length);
+            } else {
+                console.warn('⚠️ Erro ao carregar clientes:', customersResult.reason || customersResult.value?.error);
+            }
+
+            if (productsResult.status === 'fulfilled' && !productsResult.value.error) {
+                existingProducts = productsResult.value.data || [];
+                console.log('✅ Produtos carregados:', existingProducts.length);
+            } else {
+                console.warn('⚠️ Erro ao carregar produtos:', productsResult.reason || productsResult.value?.error);
+            }
+
+            const finalData = {
+                orders: existingOrders,
+                customers: existingCustomers,
+                products: existingProducts
             };
 
             globalDataLoaded = true;
 
+            console.log('✅ Processamento concluído com sucesso');
+
             res.json({
                 success: true,
-                message: `Dados processados com sucesso! Encontrados ${processedData.orders.length} pedidos, ${processedData.customers.length} clientes e ${processedData.products.length} produtos no Supabase.`,
-                data: processedData,
+                message: `Dados processados com sucesso! Encontrados ${finalData.orders.length} pedidos, ${finalData.customers.length} clientes e ${finalData.products.length} produtos no Supabase.`,
+                data: finalData,
                 files_processed: uploadedFiles.size,
                 data_summary: {
-                    orders: processedData.orders.length,
-                    customers: processedData.customers.length,
-                    products: processedData.products.length
-                }
+                    orders: finalData.orders.length,
+                    customers: finalData.customers.length,
+                    products: finalData.products.length
+                },
+                environment: process.env.NODE_ENV || 'development'
             });
 
-        } catch (error) {
-            console.error('❌ Erro ao processar dados:', error);
+        } catch (dataError) {
+            console.error('❌ Erro ao processar dados:', dataError);
             res.status(500).json({ 
-                error: `Erro ao processar dados: ${error.message}`,
-                details: error.stack
+                error: `Erro ao processar dados: ${dataError.message}`,
+                details: {
+                    stack: dataError.stack,
+                    name: dataError.name
+                }
             });
         }
 
     } catch (error) {
-        console.error('❌ Erro ao processar dados:', error);
+        console.error('❌ Erro geral no processamento:', error);
         res.status(500).json({ 
             error: `Erro ao processar dados: ${error.message}`,
-            details: error.stack
+            details: {
+                stack: error.stack,
+                name: error.name,
+                environment: process.env.NODE_ENV || 'development'
+            }
         });
     }
 });
@@ -571,6 +841,22 @@ app.get('/download_report/:filename', async (req, res) => {
     try {
         const filename = req.params.filename;
         
+        // Primeiro, verificar se é um relatório específico no diretório /tmp/reports
+        const reportsDir = '/tmp/reports';
+        const specificReportPath = path.join(reportsDir, filename);
+        
+        if (await fs.pathExists(specificReportPath)) {
+            // É um relatório específico
+            const fileContent = await fs.readFile(specificReportPath, 'utf8');
+            
+            res.setHeader('Content-Type', 'text/csv');
+            res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+            
+            res.send(fileContent);
+            return;
+        }
+        
+        // Se não for específico, buscar nos relatórios globais
         if (!globalReports) {
             return res.status(404).json({ error: 'Nenhum relatório disponível' });
         }
@@ -628,7 +914,33 @@ app.get('/check_files', async (req, res) => {
 
         const hasData = (ordersCount || 0) > 0 || (customersCount || 0) > 0;
 
-        if (hasData && globalReports) {
+        // Verificar relatórios específicos no diretório /tmp/reports
+        const reportsDir = '/tmp/reports';
+        const specificReports = [];
+        
+        try {
+            if (await fs.pathExists(reportsDir)) {
+                const files = await fs.readdir(reportsDir);
+                for (const file of files) {
+                    const filePath = path.join(reportsDir, file);
+                    const stat = await fs.stat(filePath);
+                    const sizeKb = Math.round(stat.size / 1024 * 10) / 10;
+                    
+                    specificReports.push({
+                        filename: file,
+                        name: file.replace('.csv', '').replace('.xlsx', '').replace(/_/g, ' '),
+                        size: `${sizeKb} KB`,
+                        modified: new Date(stat.mtime).toLocaleString('pt-BR')
+                    });
+                }
+            }
+        } catch (error) {
+            console.error('Erro ao verificar relatórios específicos:', error);
+        }
+        
+        if (specificReports.length > 0) {
+            res.json(specificReports);
+        } else if (hasData && globalReports) {
             const reports = globalReports.map(r => ({
                 filename: r.filename,
                 name: r.name,

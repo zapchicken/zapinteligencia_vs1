@@ -1035,7 +1035,12 @@
         // Função para limpar cache
         function clearCache() {
             if (confirm('Tem certeza que deseja limpar o cache? Isso fará com que os dados precisem ser recarregados.')) {
-                fetch('/clear_cache')
+                fetch('/clear_cache', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                })
                     .then(response => response.json())
                     .then(data => {
                         showAlert('info', data.message);

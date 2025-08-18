@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teste ZapInteligencia - Endpoints</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .test-button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        .test-button:hover {
+            background: #0056b3;
+        }
+        .result {
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 5px;
+            white-space: pre-wrap;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .success {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        .error {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+        .info {
+            background: #d1ecf1;
+            border: 1px solid #bee5eb;
+            color: #0c5460;
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        h2 {
+            color: #666;
+            border-bottom: 2px solid #007bff;
+            padding-bottom: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 Teste ZapInteligencia - Endpoints</h1>
+        
+        <div class="test-section">
+            <h2>1. Teste de Acesso Básico</h2>
+            <button class="test-button" onclick="testBasicAccess()">Testar Acesso</button>
+            <div id="basic-result" class="result"></div>
+        </div>
+
+        <div class="test-section">
+            <h2>2. Diagnóstico do Sistema</h2>
+            <button class="test-button" onclick="testDiagnostic()">Executar Diagnóstico</button>
+            <div id="diagnostic-result" class="result"></div>
+        </div>
+
+        <div class="test-section">
+            <h2>3. Status dos Dados</h2>
+            <button class="test-button" onclick="testDataStatus()">Verificar Status</button>
+            <div id="status-result" class="result"></div>
+        </div>
+
+        <div class="test-section">
+            <h2>4. Verificar Arquivos</h2>
+            <button class="test-button" onclick="testCheckFiles()">Verificar Arquivos</button>
+            <div id="files-result" class="result"></div>
+        </div>
+
+        <div class="test-section">
+            <h2>5. Teste de Processamento</h2>
+            <button class="test-button" onclick="testProcess()">Testar Processamento</button>
+            <div id="process-result" class="result"></div>
+        </div>
+
+        <div class="test-section">
+            <h2>6. Teste Completo</h2>
+            <button class="test-button" onclick="runAllTests()">Executar Todos os Testes</button>
+            <div id="all-tests-result" class="result"></div>
+        </div>
+    </div>
+
+    <script>
+        const BASE_URL = 'https://zapinteligencia-vs1-ajp5sd642-joaos-projects-63a6991f.vercel.app';
+
+        function showResult(elementId, data, isError = false, isInfo = false) {
+            const element = document.getElementById(elementId);
+            element.textContent = JSON.stringify(data, null, 2);
+            element.className = 'result ' + (isError ? 'error' : isInfo ? 'info' : 'success');
+        }
+
+        async function testBasicAccess() {
+            try {
+                const response = await fetch(BASE_URL);
+                const data = {
+                    status: response.status,
+                    statusText: response.statusText,
+                    url: response.url,
+                    ok: response.ok
+                };
+                showResult('basic-result', data, !response.ok);
+            } catch (error) {
+                showResult('basic-result', {
+                    error: error.message,
+                    type: error.name
+                }, true);
+            }
+        }
+
+        async function testDiagnostic() {
+            try {
+                const response = await fetch(`${BASE_URL}/diagnostic`);
+                const data = await response.json();
+                showResult('diagnostic-result', data, !response.ok);
+            } catch (error) {
+                showResult('diagnostic-result', {
+                    error: error.message,
+                    type: error.name
+                }, true);
+            }
+        }
+
+        async function testDataStatus() {
+            try {
+                const response = await fetch(`${BASE_URL}/data_status`);
+                const data = await response.json();
+                showResult('status-result', data, !response.ok);
+            } catch (error) {
+                showResult('status-result', {
+                    error: error.message,
+                    type: error.name
+                }, true);
+            }
+        }
+
+        async function testCheckFiles() {
+            try {
+                const response = await fetch(`${BASE_URL}/check_files`);
+                const data = await response.json();
+                showResult('files-result', data, !response.ok);
+            } catch (error) {
+                showResult('files-result', {
+                    error: error.message,
+                    type: error.name
+                }, true);
+            }
+        }
+
+        async function testProcess() {
+            try {
+                const response = await fetch(`${BASE_URL}/process`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({})
+                });
+                const data = await response.json();
+                showResult('process-result', data, !response.ok);
+            } catch (error) {
+                showResult('process-result', {
+                    error: error.message,
+                    type: error.name
+                }, true);
+            }
+        }
+
+        async function runAllTests() {
+            const results = {};
+            
+            // Teste 1: Acesso básico
+            try {
+                const response = await fetch(BASE_URL);
+                results.basicAccess = {
+                    status: response.status,
+                    ok: response.ok
+                };
+            } catch (error) {
+                results.basicAccess = { error: error.message };
+            }
+
+            // Teste 2: Diagnóstico
+            try {
+                const response = await fetch(`${BASE_URL}/diagnostic`);
+                const data = await response.json();
+                results.diagnostic = data;
+            } catch (error) {
+                results.diagnostic = { error: error.message };
+            }
+
+            // Teste 3: Status
+            try {
+                const response = await fetch(`${BASE_URL}/data_status`);
+                const data = await response.json();
+                results.dataStatus = data;
+            } catch (error) {
+                results.dataStatus = { error: error.message };
+            }
+
+            // Teste 4: Arquivos
+            try {
+                const response = await fetch(`${BASE_URL}/check_files`);
+                const data = await response.json();
+                results.checkFiles = data;
+            } catch (error) {
+                results.checkFiles = { error: error.message };
+            }
+
+            // Teste 5: Processamento
+            try {
+                const response = await fetch(`${BASE_URL}/process`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({})
+                });
+                const data = await response.json();
+                results.process = data;
+            } catch (error) {
+                results.process = { error: error.message };
+            }
+
+            showResult('all-tests-result', results, false, true);
+        }
+
+        // Executar teste básico ao carregar a página
+        window.onload = function() {
+            testBasicAccess();
+        };
+    </script>
+</body>
+</html>
